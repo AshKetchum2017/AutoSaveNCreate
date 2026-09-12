@@ -1,0 +1,14 @@
+2026-09-12
++ Mengimplementasikan setting nama operator/pola token, daftar Add/Modify/Remove, dan pemilihan operator pada form utama.
++ Menambahkan directory terpisah DieA/HiDie/KissA/HiKiss pada registry RinCorelMacros / AutoSaveNCreate; Browse mengikuti pola ExportRelatedSettings.
++ Menambahkan parser /, ~, literal berkutip, spasi, dan separator -; ~ mendukung lowercase dan koreksi typo di dalam kata gabungan. Token __ ditunda.
++ Process membuat/memakai folder hasil parsing lalu Save As CDR dengan nama asal; benturan file menawarkan duplikat bernomor, timpa, atau batal.
+
+[Scope tambahan - root bertanggal, DisposableSave, deteksi mode]
++ cmdSave kini menyimpan root; tujuan permanen menjadi root/tahun/MM. BULAN/tanggal/folder hasil token/nama asal.cdr. Tahun diambil dari folder tahun, fallback angka tahun dalam nama ancestor seperti BLACKPAINT 2026; folder hilang dibuat otomatis.
++ cmdDisposableSave menyimpan override per dokumen/mode di sesi VBA tanpa mengubah registry root atau menambah struktur tanggal. Override habis hanya setelah Save As berhasil.
++ Mode awal dideteksi dari nama CDR dengan keyword per kategori, singkatan, dan toleransi typo terbatas. Petunjuk kurang/konflik memulihkan nilai property UF; pilihan manual pada dokumen yang sama dipertahankan.
+
+[cmbCorelVersion dan preferensi embedding]
++ Mengisi cmbCorelVersion dengan 13 pilihan 25.1 sampai 15.0 sesuai screenshot; pilihan terakhir disimpan pada key CorelVersion dan dipakai saat Save As.
++ Menyimpan status chkEmbedColorProfiles/chkEmbedFonts pada registry. EmbedColorProfiles diterapkan ke EmbedICCProfile; EmbedFonts baru preferensi sambil menunggu pemetaan API CDR.

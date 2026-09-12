@@ -5,18 +5,22 @@ Private pProcessing As Boolean
 Private pDirectorySession As SNCDirectorySession
 Private pModeDocument As Document
 Private pDefaultModes As Variant
+Private pLoadingCorelVersion As Boolean
+Private pLoadingEmbedding As Boolean
 
 Private Sub UserForm_Initialize()
     On Error GoTo LoadFailed
     ' Ambil nilai designer sebelum deteksi pertama mengubah OptionButton.
     pDefaultModes = Array(CBool(optDieA.Value), CBool(optHiDie.Value), CBool(optKissA.Value), CBool(optHiKiss.Value))
     Set pDirectorySession = GetSNCDirectorySession()
+    LoadCorelVersions
+    LoadEmbeddingSettings
     LoadUserChoices
     SyncActiveDocument
     Exit Sub
 LoadFailed:
     cmdProcess.Enabled = False
-    MsgBox "Gagal memuat setting user (" & CStr(Err.Number) & "): " & Err.Description, vbExclamation, "AutoSaveNCreate"
+    MsgBox "Gagal memuat pengaturan AutoSNC (" & CStr(Err.Number) & "): " & Err.Description, vbExclamation, "AutoSaveNCreate"
 End Sub
 
 Private Sub UserForm_Activate()
@@ -27,6 +31,88 @@ Private Sub UserForm_Activate()
 DetectFailed:
     RestoreDefaultMode
     MsgBox "Gagal mendeteksi mode (" & CStr(Err.Number) & "): " & Err.Description, vbExclamation, "AutoSaveNCreate"
+End Sub
+
+Private Sub cmbCorelVersion_Change()
+    Dim settings As SNCSettingsStore
+    If pLoadingCorelVersion Then Exit Sub
+    If cmbCorelVersion.ListIndex < 0 Then Exit Sub
+    On Error GoTo SaveFailed
+    Set settings = New SNCSettingsStore
+    settings.SaveCorelVersion CStr(cmbCorelVersion.Value)
+    Exit Sub
+SaveFailed:
+    MsgBox "Gagal menyimpan pilihan versi CDR (" & CStr(Err.Number) & "): " & Err.Description, vbExclamation, "AutoSaveNCreate"
+End Sub
+
+Private Sub chkEmbedColorProfiles_Click()
+    Dim settings As SNCSettingsStore
+    If pLoadingEmbedding Then Exit Sub
+    On Error GoTo SaveFailed
+    Set settings = New SNCSettingsStore
+    settings.SaveEmbedColorProfiles CBool(chkEmbedColorProfiles.Value)
+    Exit Sub
+SaveFailed:
+    MsgBox "Gagal menyimpan Embed Color Profiles (" & CStr(Err.Number) & "): " & Err.Description, vbExclamation, "AutoSaveNCreate"
+End Sub
+
+Private Sub chkEmbedFonts_Click()
+    Dim settings As SNCSettingsStore
+    If pLoadingEmbedding Then Exit Sub
+    On Error GoTo SaveFailed
+    Set settings = New SNCSettingsStore
+    settings.SaveEmbedFonts CBool(chkEmbedFonts.Value)
+    MsgBox "Pilihan Embed Fonts sudah disimpan sebagai preferensi." & vbCrLf & _
+        "Penerapannya ke Save As CDR belum tersedia; masih menunggu pemetaan API.", vbInformation, "AutoSaveNCreate"
+    Exit Sub
+SaveFailed:
+    MsgBox "Gagal menyimpan Embed Fonts (" & CStr(Err.Number) & "): " & Err.Description, vbExclamation, "AutoSaveNCreate"
+End Sub
+
+Private Sub LoadEmbeddingSettings()
+    Dim settings As SNCSettingsStore
+    Dim errorNumber As Long
+    Dim errorDescription As String
+    On Error GoTo LoadFailed
+    pLoadingEmbedding = True
+    Set settings = New SNCSettingsStore
+    chkEmbedColorProfiles.Value = settings.LoadEmbedColorProfiles(CBool(chkEmbedColorProfiles.Value))
+    chkEmbedFonts.Value = settings.LoadEmbedFonts(CBool(chkEmbedFonts.Value))
+    chkEmbedFonts.ControlTipText = "Preferensi tersimpan; penerapan Embed Fonts ke CDR belum tersedia."
+    pLoadingEmbedding = False
+    Exit Sub
+LoadFailed:
+    errorNumber = Err.Number
+    errorDescription = Err.Description
+    pLoadingEmbedding = False
+    Err.Raise errorNumber, "AutoSaveNCreate.LoadEmbeddingSettings", errorDescription
+End Sub
+
+Private Sub LoadCorelVersions()
+    Dim settings As SNCSettingsStore
+    Dim labels As Variant
+    Dim savedVersion As String
+    Dim i As Long
+    Dim errorNumber As Long
+    Dim errorDescription As String
+    On Error GoTo LoadFailed
+    pLoadingCorelVersion = True
+    Set settings = New SNCSettingsStore
+    labels = settings.CorelVersionLabels()
+    savedVersion = settings.LoadCorelVersion()
+    cmbCorelVersion.Clear
+    cmbCorelVersion.Style = fmStyleDropDownList
+    For i = 0 To UBound(labels)
+        cmbCorelVersion.AddItem CStr(labels(i))
+        If CStr(labels(i)) = savedVersion Then cmbCorelVersion.ListIndex = i
+    Next i
+    pLoadingCorelVersion = False
+    Exit Sub
+LoadFailed:
+    errorNumber = Err.Number
+    errorDescription = Err.Description
+    pLoadingCorelVersion = False
+    Err.Raise errorNumber, "AutoSaveNCreate.LoadCorelVersions", errorDescription
 End Sub
 
 Private Sub cmbUserSelection_Change()
@@ -73,6 +159,7 @@ Private Sub cmdProcess_Click()
     End If
     If pUsers Is Nothing Then Err.Raise 5, "AutoSaveNCreate", "Daftar user belum tersedia."
     If cmbUserSelection.ListIndex < 0 Then Err.Raise 5, "AutoSaveNCreate", "Pilih setting user terlebih dahulu."
+    If cmbCorelVersion.ListIndex < 0 Then Err.Raise 5, "AutoSaveNCreate", "Pilih versi output CDR terlebih dahulu."
     modeName = SelectedMode()
     item = pUsers(cmbUserSelection.ListIndex + 1)
     Set doc = ActiveDocument
@@ -83,7 +170,8 @@ Private Sub cmdProcess_Click()
     If Not disposable Then baseDirectory = settings.LoadDirectory(modeName)
     pProcessing = True
     cmdProcess.Enabled = False
-    savedPath = runner.SaveDocument(doc, baseDirectory, CStr(item(1)), disposable)
+    savedPath = runner.SaveDocument(doc, baseDirectory, CStr(item(1)), disposable, _
+        CStr(cmbCorelVersion.Value), CBool(chkEmbedColorProfiles.Value))
     If Len(savedPath) > 0 And disposable Then pDirectorySession.ClearDirectory doc, modeName
     pProcessing = False
     cmdProcess.Enabled = True

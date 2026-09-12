@@ -4,6 +4,89 @@ Option Explicit
 Private Const REG_APP As String = "RinCorelMacros"
 Private Const REG_SECTION As String = "AutoSaveNCreate"
 
+Public Function CorelVersionLabels() As Variant
+    CorelVersionLabels = Array("25.1 (2024.1)", "25.0 (2024)", "24.3 (2023)", "24.0 (2022)", _
+        "23.0 (2021)", "22.0 (2020)", "21.0 (2019)", "20.0 (2018)", "19.0 (2017)", _
+        "18.0", "17.0", "16.0", "15.0")
+End Function
+
+Public Function IsCorelVersionLabel(ByVal versionLabel As String) As Boolean
+    Dim labels As Variant
+    Dim i As Long
+    labels = CorelVersionLabels()
+    For i = 0 To UBound(labels)
+        If versionLabel = CStr(labels(i)) Then
+            IsCorelVersionLabel = True
+            Exit Function
+        End If
+    Next i
+End Function
+
+Public Function LoadCorelVersion() As String
+    Dim savedVersion As String
+    savedVersion = GetSetting(REG_APP, REG_SECTION, "CorelVersion", "")
+    If IsCorelVersionLabel(savedVersion) Then
+        LoadCorelVersion = savedVersion
+    Else
+        ' Default eksplisit yang tersedia pada enum API CorelDRAW 2024.
+        LoadCorelVersion = "25.0 (2024)"
+    End If
+End Function
+
+Public Sub SaveCorelVersion(ByVal versionLabel As String)
+    If Not IsCorelVersionLabel(versionLabel) Then Err.Raise 5, "SNCSettingsStore", "Pilih versi CDR dari daftar yang tersedia."
+    SaveSetting REG_APP, REG_SECTION, "CorelVersion", versionLabel
+End Sub
+
+Public Function ResolveCorelFileVersion(ByVal versionLabel As String) As cdrFileVersion
+    ' Jangan memakai Val/CLng pada label: 24.3 tidak sama dengan cdrVersion24.
+    Select Case versionLabel
+        ' Nilai non-enum ini berasal dari Macro Recorder CorelDRAW user, 2026-09-12.
+        Case "25.1 (2024.1)": ResolveCorelFileVersion = 251
+        Case "24.3 (2023)": ResolveCorelFileVersion = 243
+        Case "25.0 (2024)": ResolveCorelFileVersion = cdrVersion25
+        Case "24.0 (2022)": ResolveCorelFileVersion = cdrVersion24
+        Case "23.0 (2021)": ResolveCorelFileVersion = cdrVersion23
+        Case "22.0 (2020)": ResolveCorelFileVersion = cdrVersion22
+        Case "21.0 (2019)": ResolveCorelFileVersion = cdrVersion21
+        Case "20.0 (2018)": ResolveCorelFileVersion = cdrVersion20
+        Case "19.0 (2017)": ResolveCorelFileVersion = cdrVersion19
+        Case "18.0": ResolveCorelFileVersion = cdrVersion18
+        Case "17.0": ResolveCorelFileVersion = cdrVersion17
+        Case "16.0": ResolveCorelFileVersion = cdrVersion16
+        Case "15.0": ResolveCorelFileVersion = cdrVersion15
+        Case Else
+            Err.Raise 5, "SNCSettingsStore", "Versi CDR tidak dikenal: " & versionLabel
+    End Select
+End Function
+
+Public Function LoadEmbedColorProfiles(ByVal defaultValue As Boolean) As Boolean
+    LoadEmbedColorProfiles = LoadBooleanSetting("EmbedColorProfiles", defaultValue)
+End Function
+
+Public Sub SaveEmbedColorProfiles(ByVal value As Boolean)
+    SaveSetting REG_APP, REG_SECTION, "EmbedColorProfiles", CStr(value)
+End Sub
+
+Public Function LoadEmbedFonts(ByVal defaultValue As Boolean) As Boolean
+    LoadEmbedFonts = LoadBooleanSetting("EmbedFonts", defaultValue)
+End Function
+
+Public Sub SaveEmbedFonts(ByVal value As Boolean)
+    ' Preferensi saja sampai API font embedding CDR terverifikasi.
+    SaveSetting REG_APP, REG_SECTION, "EmbedFonts", CStr(value)
+End Sub
+
+Private Function LoadBooleanSetting(ByVal key As String, ByVal defaultValue As Boolean) As Boolean
+    Dim savedValue As String
+    savedValue = GetSetting(REG_APP, REG_SECTION, key, "")
+    Select Case LCase$(savedValue)
+        Case "true": LoadBooleanSetting = True
+        Case "false": LoadBooleanSetting = False
+        Case Else: LoadBooleanSetting = defaultValue
+    End Select
+End Function
+
 ' Satu nilai registry untuk seluruh daftar. Tab memisahkan nama/pola;
 ' LF memisahkan row. Karakter tersebut ditolak sebelum penyimpanan.
 Public Function LoadUsers() As Collection

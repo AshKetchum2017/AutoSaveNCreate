@@ -3,7 +3,9 @@ Option Explicit
 ' Class Module (Name) = SNCSaveRunner.
 ' Hasil kosong berarti user membatalkan. Error diteruskan beserta operasi/path.
 Public Function SaveDocument(ByVal doc As Document, ByVal baseDirectory As String, ByVal tokenText As String, _
-                             Optional ByVal disposableDirectory As Boolean = False) As String
+                             Optional ByVal disposableDirectory As Boolean = False, _
+                             Optional ByVal corelVersionLabel As String = "", _
+                             Optional ByVal embedColorProfiles As Boolean = True) As String
     Dim fso As Object
     Dim parser As SNCFolderParser
     Dim options As StructSaveAsOptions
@@ -17,6 +19,8 @@ Public Function SaveDocument(ByVal doc As Document, ByVal baseDirectory As Strin
     Dim errorNumber As Long
     Dim errorDescription As String
     Dim dateDirectory As String
+    Dim settings As SNCSettingsStore
+    Dim targetVersion As cdrFileVersion
 
     On Error GoTo SaveFailed
     operation = "Memeriksa dokumen sumber"
@@ -24,6 +28,10 @@ Public Function SaveDocument(ByVal doc As Document, ByVal baseDirectory As Strin
     If Len(doc.FileName) = 0 Or Len(doc.FilePath) = 0 Then
         Err.Raise 5, "SNCSaveRunner", "Simpan dokumen sumber sebagai CDR terlebih dahulu agar nama dan folder sumber tersedia."
     End If
+    operation = "Memvalidasi versi output CDR"
+    Set settings = New SNCSettingsStore
+    If Len(corelVersionLabel) = 0 Then corelVersionLabel = settings.LoadCorelVersion()
+    targetVersion = settings.ResolveCorelFileVersion(corelVersionLabel)
     Set fso = CreateObject("Scripting.FileSystemObject")
     fileName = fso.GetFileName(doc.FileName)
     If StrComp(fso.GetExtensionName(fileName), "cdr", vbTextCompare) <> 0 Then
@@ -59,16 +67,16 @@ Public Function SaveDocument(ByVal doc As Document, ByVal baseDirectory As Strin
                 Exit Function
         End Select
     End If
-    operation = "Membuat folder tujuan"
-    EnsureTargetFolder baseDirectory, targetFolder
     operation = "Menyiapkan opsi Save As CDR"
     Set options = Application.CreateStructSaveAsOptions
     options.Filter = cdrCDR
     options.Range = cdrAllPages
-    options.Version = cdrCurrentVersion
-    options.EmbedICCProfile = True
+    options.Version = targetVersion
+    options.EmbedICCProfile = embedColorProfiles
     options.EmbedVBAProject = True
     options.Overwrite = overwrite
+    operation = "Membuat folder tujuan"
+    EnsureTargetFolder baseDirectory, targetFolder
     operation = "Document.SaveAs"
     doc.SaveAs targetPath, options
     operation = "Memeriksa hasil Save As"
