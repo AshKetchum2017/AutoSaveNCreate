@@ -334,4 +334,8 @@ AutoSaveNCreate saat ini mencakup:
 
 Fokus utamanya adalah mengurangi pekerjaan manual saat menentukan lokasi dan menyimpan file produksi, bukan mengubah susunan objek di dalam dokumen.
 
+---
+
+## Feedback and Development
+
 Source boleh dipelajari dan dikembangkan, dan issue/feedback tentang bug, edge case, CorelDRAW API, architecture, atau improvement sangat dihargai.
