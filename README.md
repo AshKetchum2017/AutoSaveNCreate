@@ -333,3 +333,5 @@ AutoSaveNCreate saat ini mencakup:
 - validasi input dan pelaporan error.
 
 Fokus utamanya adalah mengurangi pekerjaan manual saat menentukan lokasi dan menyimpan file produksi, bukan mengubah susunan objek di dalam dokumen.
+
+Source boleh dipelajari dan dikembangkan, dan issue/feedback tentang bug, edge case, CorelDRAW API, architecture, atau improvement sangat dihargai.
