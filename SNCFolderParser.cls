@@ -4,6 +4,77 @@ Option Explicit
 ' Edit/tambah pasangan di sini; koreksi juga berlaku di dalam kata gabungan.
 Private Const TYPO_RULES As String = "prnting=printing;printng=printing;rklame=reklame;rekalme=reklame;reklaem=reklame"
 
+' Membaca bagian ~ dari nama folder yang sudah terbentuk, tanpa mengubah path.
+' Semua pola tersimpan dicoba; pola paling spesifik menang. Ambigu -> nama asli.
+Public Function DisposableParentName(ByVal folderName As String, ByVal users As Collection) As String
+    Dim i As Long
+    Dim item As Variant
+    Dim candidate As String
+    Dim bestName As String
+    Dim score As Long
+    Dim bestScore As Long
+    Dim ambiguous As Boolean
+    bestScore = -1
+    DisposableParentName = folderName
+    For i = 1 To users.Count
+        item = users(i)
+        candidate = ParentFromTemplate(folderName, CStr(item(1)), score)
+        If Len(candidate) > 0 Then
+            If score > bestScore Then
+                bestScore = score
+                bestName = candidate
+                ambiguous = False
+            ElseIf score = bestScore Then
+                If StrComp(bestName, candidate, vbTextCompare) <> 0 Then ambiguous = True
+            End If
+        End If
+    Next i
+    If bestScore >= 0 And Not ambiguous Then DisposableParentName = StrConv(CorrectParentName(bestName), vbProperCase)
+End Function
+
+Private Function ParentFromTemplate(ByVal folderName As String, ByVal templateText As String, ByRef score As Long) As String
+    Dim expression As Object
+    Dim matches As Object
+    Dim match As Object
+    Dim pattern As String
+    Dim ch As String
+    Dim inQuotes As Boolean
+    Dim captures As Long
+    Dim i As Long
+    Dim candidate As String
+    score = 0
+    ValidateTemplate templateText
+    For i = 1 To Len(templateText)
+        ch = Mid$(templateText, i, 1)
+        If ch = Chr$(34) Then
+            inQuotes = Not inQuotes
+        ElseIf Not inQuotes And ch = "~" Then
+            pattern = pattern & "(.+?)"
+            captures = captures + 1
+        ElseIf Not inQuotes And ch = "/" Then
+            pattern = pattern & "(?:rc|bp|fp|co|cu)"
+            score = score + 2
+        Else
+            If InStr(1, "\.^$|?*+()[]{}", ch, vbBinaryCompare) > 0 Then pattern = pattern & "\"
+            pattern = pattern & ch
+            score = score + 1
+        End If
+    Next i
+    If captures = 0 Then Exit Function
+    Set expression = CreateObject("VBScript.RegExp")
+    expression.Pattern = "^" & pattern & "$"
+    expression.IgnoreCase = True
+    expression.Global = False
+    Set matches = expression.Execute(folderName)
+    If matches.Count = 0 Then Exit Function
+    Set match = matches(0)
+    candidate = CStr(match.SubMatches(0))
+    For i = 1 To match.SubMatches.Count - 1
+        If StrComp(candidate, CStr(match.SubMatches(i)), vbTextCompare) <> 0 Then Exit Function
+    Next i
+    ParentFromTemplate = Trim$(candidate)
+End Function
+
 Public Sub ValidateTemplate(ByVal templateText As String)
     Dim i As Long
     Dim ch As String
@@ -143,7 +214,7 @@ Public Function SourceDateDirectory(ByVal sourceDirectory As String) As String
         If StrComp(dayPath, monthPath, vbTextCompare) = 0 Then Exit Do
         dayPath = monthPath
     Loop
-    Err.Raise 5, "SNCFolderParser", "Folder bulan/tanggal sumber tidak ditemukan. Gunakan DisposableSave untuk directory khusus."
+    Err.Raise 5, "SNCFolderParser", "Folder bulan/tanggal sumber tidak ditemukan. Buka DirectorySettings, tambahkan directory khusus dengan Add, lalu Select."
 End Function
 
 Private Function SourceYear(ByVal ancestorPath As String) As String
@@ -176,7 +247,7 @@ Private Function SourceYear(ByVal ancestorPath As String) As String
             currentPath = fso.GetParentFolderName(currentPath)
         Loop
     Next pass
-    Err.Raise 5, "SNCFolderParser", "Tahun sumber tidak ditemukan pada folder tahun maupun nama folder induk. Gunakan DisposableSave."
+    Err.Raise 5, "SNCFolderParser", "Tahun sumber tidak ditemukan pada folder tahun maupun nama folder induk. Buka DirectorySettings, tambahkan directory khusus dengan Add, lalu Select."
 End Function
 
 Private Function IsFourDigitYear(ByVal value As String) As Boolean
@@ -199,7 +270,7 @@ Private Function YearInFolderName(ByVal folderName As String) As String
         Else
             If IsFourDigitYear(digits) Then
                 If Len(YearInFolderName) > 0 And YearInFolderName <> digits Then
-                    Err.Raise 5, "SNCFolderParser", "Tahun ambigu pada folder " & folderName & ". Gunakan DisposableSave."
+                    Err.Raise 5, "SNCFolderParser", "Tahun ambigu pada folder " & folderName & ". Buka DirectorySettings, tambahkan directory khusus dengan Add, lalu Select."
                 End If
                 YearInFolderName = digits
             End If

@@ -17,22 +17,47 @@ Public Sub BeginEdit(ByVal modeName As String, Optional ByVal sourceDocument As 
     Set pSourceDocument = sourceDocument
     Set pSession = GetSNCDirectorySession()
     Me.Caption = "Root Directory - " & modeName
-    If Not sourceDocument Is Nothing Then
-        If Len(pSession.GetDirectory(sourceDocument, modeName)) > 0 Then
-            txbDirectory.Text = pSession.GetDirectory(sourceDocument, modeName)
-            Me.Caption = "Directory Sekali Pakai - " & modeName
-        End If
-    End If
+    RefreshDisposableList 0
 End Sub
 
-Private Sub cmdDisposableSave_Click()
-    On Error GoTo SaveFailed
-    If pSession Is Nothing Then Err.Raise 5, "DirectorySettings", "Konteks directory belum tersedia."
-    pSession.SetDirectory pSourceDocument, pModeName, txbDirectory.Text
-    Unload Me
+Private Sub cmdAdd_Click()
+    Dim settings As SNCSettingsStore
+    Dim parser As SNCFolderParser
+    Dim detector As SNCModeDetector
+    Dim users As Collection
+    Dim fso As Object
+    Dim folderPath As String
+    Dim fileName As String
+    Dim modeName As String
+    Dim displayText As String
+    Dim conflict As Boolean
+    Dim index As Long
+    On Error GoTo AddFailed
+    folderPath = pSession.NormalizeDirectory(txbDirectory.Text)
+    If Not pSourceDocument Is Nothing Then fileName = pSourceDocument.FileName
+    Set detector = New SNCModeDetector
+    modeName = detector.DetectDirectoryMode(folderPath, fileName, conflict)
+    If conflict Then
+        If MsgBox("Petunjuk kategori directory/nama CDR bertentangan." & vbCrLf & _
+            folderPath & vbCrLf & "CDR: " & fileName & vbCrLf & vbCrLf & _
+            "OK = lanjut menambahkan path saja tanpa kategori." & vbCrLf & _
+            "Cancel = batalkan penambahan.", vbOKCancel Or vbExclamation Or vbDefaultButton2, "AutoSaveNCreate") <> vbOK Then Exit Sub
+    End If
+    Set settings = New SNCSettingsStore
+    displayText = folderPath
+    If Len(modeName) > 0 Then
+        Set parser = New SNCFolderParser
+        Set fso = CreateObject("Scripting.FileSystemObject")
+        Set users = settings.LoadUsers()
+        displayText = parser.DisposableParentName(fso.GetFileName(folderPath), users) & _
+            " | " & detector.ModeCaption(modeName) & " | " & folderPath
+    End If
+    index = pSession.AddDirectory(folderPath, displayText)
+    txbDirectory.Text = settings.LoadDirectory(pModeName)
+    RefreshDisposableList index
     Exit Sub
-SaveFailed:
-    MsgBox "Gagal menyimpan directory sekali pakai (" & CStr(Err.Number) & "): " & Err.Description, vbExclamation, "AutoSaveNCreate"
+AddFailed:
+    MsgBox "Gagal menambah directory sementara (" & CStr(Err.Number) & "): " & Err.Description, vbExclamation, "AutoSaveNCreate"
 End Sub
 
 Private Sub cmdBrowse_Click()
@@ -49,19 +74,71 @@ Private Sub cmdCancel_Click()
     Unload Me
 End Sub
 
+Private Sub cmdClear_Click()
+    On Error GoTo ClearFailed
+    pSession.ClearAll
+    RefreshDisposableList 0
+    Exit Sub
+ClearFailed:
+    MsgBox "Gagal mengosongkan daftar (" & CStr(Err.Number) & "): " & Err.Description, vbExclamation, "AutoSaveNCreate"
+End Sub
+
+Private Sub cmdRemove_Click()
+    Dim index As Long
+    On Error GoTo RemoveFailed
+    If lbxDisposableLists.ListIndex < 0 Then Exit Sub
+    index = lbxDisposableLists.ListIndex + 1
+    pSession.RemoveDirectory index
+    If index > pSession.Count Then index = pSession.Count
+    RefreshDisposableList index
+    Exit Sub
+RemoveFailed:
+    MsgBox "Gagal menghapus item directory (" & CStr(Err.Number) & "): " & Err.Description, vbExclamation, "AutoSaveNCreate"
+End Sub
+
 Private Sub cmdSave_Click()
     Dim settings As SNCSettingsStore
     On Error GoTo SaveFailed
     Set settings = New SNCSettingsStore
     settings.SaveDirectory pModeName, txbDirectory.Text
+    pSession.ClearSelection
     Unload Me
     Exit Sub
 SaveFailed:
     MsgBox "Gagal menyimpan directory (" & CStr(Err.Number) & "): " & Err.Description, vbExclamation, "AutoSaveNCreate"
 End Sub
 
+Private Sub cmdSelect_Click()
+    On Error GoTo SelectFailed
+    If lbxDisposableLists.ListIndex < 0 Then Exit Sub
+    pSession.SelectDirectory pSourceDocument, lbxDisposableLists.ListIndex + 1
+    Unload Me
+    Exit Sub
+SelectFailed:
+    MsgBox "Gagal memilih directory sementara (" & CStr(Err.Number) & "): " & Err.Description, vbExclamation, "AutoSaveNCreate"
+End Sub
+
+Private Sub lbxDisposableLists_Click()
+    ' Memilih row tidak mengganti textbox root permanen.
+    cmdSelect.Enabled = (lbxDisposableLists.ListIndex >= 0)
+    cmdRemove.Enabled = (lbxDisposableLists.ListIndex >= 0)
+End Sub
+
+Private Sub RefreshDisposableList(ByVal selectedIndex As Long)
+    Dim i As Long
+    lbxDisposableLists.Clear
+    lbxDisposableLists.ColumnCount = 1
+    lbxDisposableLists.MultiSelect = fmMultiSelectSingle
+    For i = 1 To pSession.Count
+        lbxDisposableLists.AddItem pSession.DisplayAt(i)
+    Next i
+    If selectedIndex > 0 And selectedIndex <= pSession.Count Then lbxDisposableLists.ListIndex = selectedIndex - 1
+    cmdClear.Enabled = (pSession.Count > 0)
+    lbxDisposableLists_Click
+End Sub
+
 Private Sub txbDirectory_Change()
-    ' Perubahan tetap berupa draft sampai cmdSave ditekan.
+    ' Draft: cmdAdd menambah daftar sesi; cmdSave menyimpan root permanen.
 End Sub
 
 ' Mengikuti pola ExportRelatedSettings: dialog Save As dummy, lalu fallback Shell.

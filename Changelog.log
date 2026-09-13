@@ -1,14 +1,26 @@
 2026-09-12
-+ Mengimplementasikan setting nama operator/pola token, daftar Add/Modify/Remove, dan pemilihan operator pada form utama.
-+ Menambahkan directory terpisah DieA/HiDie/KissA/HiKiss pada registry RinCorelMacros / AutoSaveNCreate; Browse mengikuti pola ExportRelatedSettings.
-+ Menambahkan parser /, ~, literal berkutip, spasi, dan separator -; ~ mendukung lowercase dan koreksi typo di dalam kata gabungan. Token __ ditunda.
-+ Process membuat/memakai folder hasil parsing lalu Save As CDR dengan nama asal; benturan file menawarkan duplikat bernomor, timpa, atau batal.
+[Implementasi awal]
++ Menambahkan setting operator, pola token, Add/Modify/Remove, dan pemilihan operator pada form utama.
++ Menambahkan directory terpisah untuk DieA, HiDie, KissA, dan HiKiss.
++ Menambahkan parser `/`, `~`, literal berkutip, spasi, dan separator `-`.
++ Process membuat atau memakai folder hasil parsing lalu Save As CDR dengan nama asal.
++ Benturan file menawarkan pilihan duplikat bernomor, timpa, atau batal.
 
 [Scope tambahan - root bertanggal, DisposableSave, deteksi mode]
-+ cmdSave kini menyimpan root; tujuan permanen menjadi root/tahun/MM. BULAN/tanggal/folder hasil token/nama asal.cdr. Tahun diambil dari folder tahun, fallback angka tahun dalam nama ancestor seperti BLACKPAINT 2026; folder hilang dibuat otomatis.
-+ cmdDisposableSave menyimpan override per dokumen/mode di sesi VBA tanpa mengubah registry root atau menambah struktur tanggal. Override habis hanya setelah Save As berhasil.
-+ Mode awal dideteksi dari nama CDR dengan keyword per kategori, singkatan, dan toleransi typo terbatas. Petunjuk kurang/konflik memulihkan nilai property UF; pilihan manual pada dokumen yang sama dipertahankan.
++ Tujuan permanen kini memakai struktur root/tahun/bulan/tanggal/folder hasil token/nama asal.cdr.
++ Tahun diambil dari folder tahun atau angka tahun pada nama ancestor.
++ Menambahkan DisposableSave sebagai override per dokumen/mode selama sesi VBA.
++ Menambahkan deteksi mode awal dari nama CDR dengan keyword, singkatan, dan toleransi typo terbatas.
+~ Pilihan manual pada dokumen yang sama tetap dipertahankan.
 
 [cmbCorelVersion dan preferensi embedding]
-+ Mengisi cmbCorelVersion dengan 13 pilihan 25.1 sampai 15.0 sesuai screenshot; pilihan terakhir disimpan pada key CorelVersion dan dipakai saat Save As.
-+ Menyimpan status chkEmbedColorProfiles/chkEmbedFonts pada registry. EmbedColorProfiles diterapkan ke EmbedICCProfile; EmbedFonts baru preferensi sambil menunggu pemetaan API CDR.
++ Menambahkan pilihan CorelVersion 25.1 sampai 15.0 dan menyimpan pilihan terakhir ke registry.
++ Save As kini memakai versi Corel yang dipilih.
++ Menyimpan preferensi EmbedColorProfiles dan EmbedFonts.
+~ EmbedColorProfiles sudah diterapkan ke EmbedICCProfile.
+~ EmbedFonts masih disimpan sebagai preferensi sampai pemetaan API CDR terverifikasi.
+
+2026-09-13
+[Refactor Disposable]
+~ Merapikan logika DisposableSave agar lebih aman, konsisten, dan mudah dipelihara.
+~ Kontrol Disposable sudah diuji user tanpa error.

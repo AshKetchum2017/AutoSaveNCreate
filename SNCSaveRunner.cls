@@ -38,13 +38,14 @@ Public Function SaveDocument(ByVal doc As Document, ByVal baseDirectory As Strin
         Err.Raise 5, "SNCSaveRunner", "Dokumen sumber harus berupa file CDR."
     End If
     operation = "Memeriksa directory tujuan"
-    If Not fso.FolderExists(baseDirectory) Then Err.Raise 5, "SNCSaveRunner", "Atur directory tujuan mode yang dipilih terlebih dahulu."
-    Set parser = New SNCFolderParser
-    operation = "Parsing nama folder"
-    folderName = parser.BuildFolderName(tokenText, doc.FilePath)
+    If Not fso.FolderExists(baseDirectory) Then Err.Raise 5, "SNCSaveRunner", "Directory tujuan tidak tersedia. Periksa kembali folder yang dipilih."
     If disposableDirectory Then
-        targetFolder = fso.BuildPath(baseDirectory, folderName)
+        ' Disposable sudah merupakan folder akhir: tidak membaca token/tanggal.
+        targetFolder = fso.GetFolder(baseDirectory).Path
     Else
+        Set parser = New SNCFolderParser
+        operation = "Parsing nama folder"
+        folderName = parser.BuildFolderName(tokenText, doc.FilePath)
         operation = "Membaca tahun, bulan, dan tanggal sumber"
         dateDirectory = parser.SourceDateDirectory(doc.FilePath)
         targetFolder = fso.BuildPath(fso.BuildPath(baseDirectory, dateDirectory), folderName)
@@ -76,7 +77,7 @@ Public Function SaveDocument(ByVal doc As Document, ByVal baseDirectory As Strin
     options.EmbedVBAProject = True
     options.Overwrite = overwrite
     operation = "Membuat folder tujuan"
-    EnsureTargetFolder baseDirectory, targetFolder
+    If Not disposableDirectory Then EnsureTargetFolder baseDirectory, targetFolder
     operation = "Document.SaveAs"
     doc.SaveAs targetPath, options
     operation = "Memeriksa hasil Save As"

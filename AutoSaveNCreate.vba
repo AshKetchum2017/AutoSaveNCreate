@@ -17,6 +17,7 @@ Private Sub UserForm_Initialize()
     LoadEmbeddingSettings
     LoadUserChoices
     SyncActiveDocument
+    UpdateDirectoryState
     Exit Sub
 LoadFailed:
     cmdProcess.Enabled = False
@@ -27,6 +28,7 @@ Private Sub UserForm_Activate()
     On Error GoTo DetectFailed
     If pProcessing Then Exit Sub
     SyncActiveDocument
+    UpdateDirectoryState
     Exit Sub
 DetectFailed:
     RestoreDefaultMode
@@ -123,6 +125,32 @@ Private Sub cmdClose_Click()
     Unload Me
 End Sub
 
+Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    ' Close/X melepas pilihan; daftar directory tetap berada di SNCSession.
+    If Not pDirectorySession Is Nothing Then pDirectorySession.ClearSelection
+End Sub
+
+Private Sub UpdateDirectoryState()
+    Dim disposable As Boolean
+    Dim folderPath As String
+    Dim hasUsers As Boolean
+    If Not pDirectorySession Is Nothing Then
+        If Application.Documents.Count > 0 Then folderPath = pDirectorySession.GetDirectory(ActiveDocument)
+    End If
+    disposable = (Len(folderPath) > 0)
+    optDieA.Locked = disposable
+    optHiDie.Locked = disposable
+    optKissA.Locked = disposable
+    optHiKiss.Locked = disposable
+    optDieA.Enabled = Not disposable
+    optHiDie.Enabled = Not disposable
+    optKissA.Enabled = Not disposable
+    optHiKiss.Enabled = Not disposable
+    If Not pUsers Is Nothing Then hasUsers = (pUsers.Count > 0)
+    cmdProcess.Enabled = Not pProcessing And (disposable Or hasUsers)
+    cmdProcess.ControlTipText = folderPath
+End Sub
+
 Private Sub cmdDieASetting_Click()
     ShowDirectorySettings "DieA"
 End Sub
@@ -150,38 +178,43 @@ Private Sub cmdProcess_Click()
     Dim errorDescription As String
     Dim baseDirectory As String
     Dim disposable As Boolean
+    Dim tokenText As String
     If pProcessing Then Exit Sub
     On Error GoTo ProcessFailed
     If Application.Documents.Count = 0 Then Err.Raise 5, "AutoSaveNCreate", "Tidak ada dokumen aktif."
     If SyncActiveDocument() Then
+        UpdateDirectoryState
         MsgBox "Dokumen aktif berubah. Periksa pilihan mode dan setting user, lalu tekan Process kembali.", vbInformation, "AutoSaveNCreate"
         Exit Sub
     End If
-    If pUsers Is Nothing Then Err.Raise 5, "AutoSaveNCreate", "Daftar user belum tersedia."
-    If cmbUserSelection.ListIndex < 0 Then Err.Raise 5, "AutoSaveNCreate", "Pilih setting user terlebih dahulu."
     If cmbCorelVersion.ListIndex < 0 Then Err.Raise 5, "AutoSaveNCreate", "Pilih versi output CDR terlebih dahulu."
-    modeName = SelectedMode()
-    item = pUsers(cmbUserSelection.ListIndex + 1)
     Set doc = ActiveDocument
     Set settings = New SNCSettingsStore
     Set runner = New SNCSaveRunner
-    baseDirectory = pDirectorySession.GetDirectory(doc, modeName)
+    baseDirectory = pDirectorySession.GetDirectory(doc)
     disposable = (Len(baseDirectory) > 0)
-    If Not disposable Then baseDirectory = settings.LoadDirectory(modeName)
+    If Not disposable Then
+        If pUsers Is Nothing Then Err.Raise 5, "AutoSaveNCreate", "Daftar user belum tersedia."
+        If cmbUserSelection.ListIndex < 0 Then Err.Raise 5, "AutoSaveNCreate", "Pilih setting user terlebih dahulu."
+        modeName = SelectedMode()
+        item = pUsers(cmbUserSelection.ListIndex + 1)
+        tokenText = CStr(item(1))
+        baseDirectory = settings.LoadDirectory(modeName)
+    End If
     pProcessing = True
     cmdProcess.Enabled = False
-    savedPath = runner.SaveDocument(doc, baseDirectory, CStr(item(1)), disposable, _
+    savedPath = runner.SaveDocument(doc, baseDirectory, tokenText, disposable, _
         CStr(cmbCorelVersion.Value), CBool(chkEmbedColorProfiles.Value))
-    If Len(savedPath) > 0 And disposable Then pDirectorySession.ClearDirectory doc, modeName
+    If Len(savedPath) > 0 And disposable Then pDirectorySession.ClearSelection
     pProcessing = False
-    cmdProcess.Enabled = True
+    UpdateDirectoryState
     If Len(savedPath) > 0 Then MsgBox "CDR berhasil disimpan:" & vbCrLf & savedPath, vbInformation, "AutoSaveNCreate"
     Exit Sub
 ProcessFailed:
     errorNumber = Err.Number
     errorDescription = Err.Description
     pProcessing = False
-    cmdProcess.Enabled = True
+    UpdateDirectoryState
     MsgBox "Gagal memproses CDR (" & CStr(errorNumber) & "): " & vbCrLf & errorDescription, vbExclamation, "AutoSaveNCreate"
 End Sub
 
@@ -234,7 +267,7 @@ Private Sub LoadUserChoices()
         If StrComp(CStr(item(0)), previousName, vbTextCompare) = 0 Then cmbUserSelection.ListIndex = i - 1
     Next i
     If cmbUserSelection.ListIndex < 0 And pUsers.Count > 0 Then cmbUserSelection.ListIndex = 0
-    cmdProcess.Enabled = (pUsers.Count > 0)
+    UpdateDirectoryState
 End Sub
 
 Private Function SelectedMode() As String
@@ -272,6 +305,7 @@ Private Sub ShowDirectorySettings(ByVal modeName As String)
     editor.BeginEdit modeName, sourceDocument
     operation = "Menampilkan DirectorySettings"
     editor.Show vbModal
+    UpdateDirectoryState
     Exit Sub
 OpenFailed:
     errorNumber = Err.Number
