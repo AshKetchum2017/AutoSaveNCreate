@@ -1,6 +1,7 @@
 Option Explicit
 
-' Import this SAME Standard Module into each target GMS (not only MacroRunner).
+' Generic bridge template; import into target GMS projects, not only MacroRunner.
+' AutoDistributeUF must use Auto Distribute UF/MRTargetBridge.bas instead.
 ' Form code must contain MRBindRunner, MRDetachRunner and UserForm_Terminate.
 ' No reference to the MacroRunner VBA project is needed.
 Public Function OpenMacro(ByVal formName As String, ByVal modal As Boolean, _
