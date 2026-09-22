@@ -1,3 +1,4 @@
+------------------------------------------------------------------------------------------------------------------------------------------------------
 2026-09-12
 [Implementasi awal]
 + Menambahkan setting operator, pola token, Add/Modify/Remove, dan pemilihan operator pada form utama.
@@ -20,7 +21,14 @@
 ~ EmbedColorProfiles sudah diterapkan ke EmbedICCProfile.
 ~ EmbedFonts masih disimpan sebagai preferensi sampai pemetaan API CDR terverifikasi.
 
+------------------------------------------------------------------------------------------------------------------------------------------------------
 2026-09-13
 [Refactor Disposable]
 ~ Merapikan logika DisposableSave agar lebih aman, konsisten, dan mudah dipelihara.
 ~ Kontrol Disposable sudah diuji user tanpa error.
+
+------------------------------------------------------------------------------------------------------------------------------------------------------
+2026-09-22
+[ModeDetector - pengenalan nama file]
+~ Memperbaiki deteksi mode agar keyword umum seperti CUT/CUTT tidak menimbulkan konflik antara A3 dan hires.
+~ Nama seperti KISS CUT ECO SOLVENT kini dikenali sebagai HiKiss, dengan atau tanpa strip/kurung. Daftar keyword dan toleransi typo tetap dipertahankan.
