@@ -1,13 +1,13 @@
 Option Explicit
 
 ' Class Module (Name) = SNCModeDetector. Edit daftar keyword per kategori di sini.
-Private Const KISSA_KEYWORDS As String = "KISS CUT|CUTTING BAHAN|LASER|VINYL|CHROMO|A3|A3+"
-Private Const DIEA_KEYWORDS As String = "DIE CUT|CUTTING BAHAN|LASER|KARTU NAMA|GR|KOTAK|VINYL|CHROMO|A3|A3+|LONG|EXT|EXTENDED|AP|ART PAPER|APA 3|APA 3+"
-Private Const HIKISS_KEYWORDS As String = "KISS CUT|ECO SOLVENT|CUTTING BAHAN|SANDBLAST|EPSON|UV PREMIUM|UV GEL|METERAN|RITRAMA|MAXDECAL|ESSENS|HIGHRESS"
-Private Const HIDIE_KEYWORDS As String = "DIE CUT|POTONG CUTTER|ECO SOLVENT|EPSON|UV PREMIUM|UV GEL|METERAN|RITRAMA|MAXDECAL|ESSENS|INFRABOARD|FOAMBOARD|HIGHRESS"
-Private Const KISS_MARKERS As String = "KISS CUT|KIS CUT|KISSCUT|KISS|KIS|KISS CUTT|KISSCUTT|CUT|CUTT"
-Private Const DIE_MARKERS As String = "DIE CUT|DIECUT|DIE CUTT|DIECUTT|DIE|POT CUTTER|POT. CUTTER|POTONG CUTTER|CUT|CUTT|POTONG|CUTTER"
-Private Const CUTTER_MARKERS As String = "POTONG CUTTER|POT CUTTER|CUTTER"
+Private Const KISSA_KEYWORDS As String = "KISS CUT|CUTTING BAHAN|LASER|VINYL|CHROMO|A3|A3+|CUT|CUTT|MASKING"
+Private Const DIEA_KEYWORDS As String = "DIE CUT|CUTTING BAHAN|LASER|KARTU NAMA|GR|KOTAK|VINYL|CHROMO|A3|A3+|LONG|EXT|EXTENDED|AP|ART PAPER|APA 3|APA 3+|CUT|CUTT|2 SISI"
+Private Const HIKISS_KEYWORDS As String = "KISS CUT|ECO SOLVENT|CUTTING BAHAN|SANDBLAST|EPSON|UV PREMIUM|UV GEL|METERAN|RITRAMA|HCR|GRAFTAC|MAXDECAL|ESSENS|HIGHRESS|CUT|CUTT"
+Private Const HIDIE_KEYWORDS As String = "DIE CUT|POTONG CUTTER|ECO SOLVENT|EPSON|UV PREMIUM|UV GEL|METERAN|RITRAMA|HCR|GRAFTAC|MAXDECAL|ESSENS|INFRABOARD|FOAMBOARD|HIGHRESS|CUT|CUTT"
+Private Const KISS_MARKERS As String = "KISS CUT|KIS CUT|KISSCUT|KISS|KIS|KISS CUTT|KISSCUTT|MASKING"
+Private Const DIE_MARKERS As String = "DIE CUT|DIECUT|DIE CUTT|DIECUTT|DIE"
+Private Const CUTTER_MARKERS As String = "POTONG CUTTER|POT CUTTER|POTONG|CUTTER|POT. CUTTER|POT|POT."
 Private Const HI_SHORT_KEYWORDS As String = "ECO|EPS|UV"
 Private Const DIRECTORY_DIE_MARKERS As String = "DIE"
 
@@ -62,12 +62,18 @@ End Function
 Private Sub ReadSignals(ByVal value As String, ByRef kiss As Boolean, ByRef die As Boolean, ByRef smallFormat As Boolean, ByRef highFormat As Boolean)
     Dim words As Variant
     Dim cutter As Boolean
+    Dim smallKeywords As String
+    Dim highKeywords As String
     words = Split(NormalizeWords(value), " ")
     kiss = kiss Or HasAny(words, KISS_MARKERS)
     cutter = HasAny(words, CUTTER_MARKERS)
     die = die Or HasAny(words, DIE_MARKERS) Or cutter
-    smallFormat = smallFormat Or HasGroup(words, KISSA_KEYWORDS) Or HasGroup(words, DIEA_KEYWORDS)
-    highFormat = highFormat Or HasGroup(words, HIKISS_KEYWORDS) Or HasGroup(words, HIDIE_KEYWORDS) Or HasAny(words, HI_SHORT_KEYWORDS) Or cutter
+    smallKeywords = KISSA_KEYWORDS & "|" & DIEA_KEYWORDS
+    highKeywords = HIKISS_KEYWORDS & "|" & HIDIE_KEYWORDS
+    ' Keyword bersama (misalnya CUT/CUTT) bukan bukti ukuran/kelompok produksi.
+    ' Kandidat pembeda mengikuti isi konstanta, tanpa daftar pengecualian baru.
+    smallFormat = smallFormat Or HasGroup(words, smallKeywords, highKeywords)
+    highFormat = highFormat Or HasGroup(words, highKeywords, smallKeywords) Or HasAny(words, HI_SHORT_KEYWORDS) Or cutter
 End Sub
 
 Private Function ModeFromSignals(ByVal kiss As Boolean, ByVal die As Boolean, ByVal smallFormat As Boolean, ByVal highFormat As Boolean) As String
@@ -91,20 +97,38 @@ Public Function DetectMode(ByVal fileName As String) As String
     DetectMode = ModeFromSignals(kiss, die, smallFormat, highFormat)
 End Function
 
-Private Function HasGroup(ByRef words As Variant, ByVal keywords As String) As Boolean
+Private Function HasGroup(ByRef words As Variant, ByVal keywords As String, ByVal otherGroupKeywords As String) As Boolean
+    Dim items As Variant
+    Dim i As Long
+    Dim keyword As String
+    items = Split(keywords, "|")
+    For i = 0 To UBound(items)
+        keyword = NormalizeWords(CStr(items(i)))
+        Select Case keyword
+            Case ""
+            Case "KISS CUT", "DIE CUT", "POTONG CUTTER"
+                ' Penanda jenis potong tidak sekaligus membuktikan kelompok produksi.
+            Case Else
+                If Not KeywordInList(keyword, otherGroupKeywords) Then
+                    If MatchesPhrase(words, keyword) Then
+                        HasGroup = True
+                        Exit Function
+                    End If
+                End If
+        End Select
+    Next i
+End Function
+
+Private Function KeywordInList(ByVal keyword As String, ByVal keywords As String) As Boolean
     Dim items As Variant
     Dim i As Long
     items = Split(keywords, "|")
     For i = 0 To UBound(items)
-        Select Case CStr(items(i))
-            Case "KISS CUT", "DIE CUT", "POTONG CUTTER"
-                ' Penanda jenis potong tidak sekaligus membuktikan kelompok produksi.
-            Case Else
-                If MatchesPhrase(words, CStr(items(i))) Then
-                    HasGroup = True
-                    Exit Function
-                End If
-        End Select
+        ' Keanggotaan daftar harus exact setelah normalisasi, bukan fuzzy.
+        If keyword = NormalizeWords(CStr(items(i))) Then
+            KeywordInList = True
+            Exit Function
+        End If
     Next i
 End Function
 
