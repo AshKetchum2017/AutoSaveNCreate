@@ -32,3 +32,14 @@
 [ModeDetector - pengenalan nama file]
 ~ Memperbaiki deteksi mode agar keyword umum seperti CUT/CUTT tidak menimbulkan konflik antara A3 dan hires.
 ~ Nama seperti KISS CUT ECO SOLVENT kini dikenali sebagai HiKiss, dengan atau tanpa strip/kurung. Daftar keyword dan toleransi typo tetap dipertahankan.
+
+------------------------------------------------------------------------------------------------------------------------------------------------------
+2026-09-27
+[ModeDetector - VINYL GRAFTAC]
++ Memisahkan deteksi finishing dari petunjuk mesin, merek, dan bahan untuk kategori A/Hi.
+~ Nama yang memuat VINYL dan GRAFTAC bersama kini memakai kategori A; contoh DIECUT menjadi DieA.
+~ GRAFTAC tanpa petunjuk lain memilih Hi, sedangkan petunjuk A yang jelas tetap memilih A. CHROMO dan CHROME tidak lagi tertukar oleh toleransi typo.
+
+[Pemindahan keyword]
++ KARTU NAMA/LONG/EXTENDED/EXT langsung memilih DieA; INFRABOARD/FOAMBOARD langsung memilih HiDie, meski ada petunjuk finishing lain.
+~ SANDBLAST berlaku untuk kedua mode Hi; CUTTING BAHAN berlaku untuk semua mode. Keyword lama lainnya tidak lagi dipakai untuk deteksi.

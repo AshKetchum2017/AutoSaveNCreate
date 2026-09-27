@@ -1,14 +1,24 @@
 Option Explicit
 
-' Class Module (Name) = SNCModeDetector. Edit daftar keyword per kategori di sini.
-Private Const KISSA_KEYWORDS As String = "KISS CUT|CUTTING BAHAN|LASER|VINYL|CHROMO|A3|A3+|CUT|CUTT|MASKING"
-Private Const DIEA_KEYWORDS As String = "DIE CUT|CUTTING BAHAN|LASER|KARTU NAMA|GR|KOTAK|VINYL|CHROMO|A3|A3+|LONG|EXT|EXTENDED|AP|ART PAPER|APA 3|APA 3+|CUT|CUTT|2 SISI"
-Private Const HIKISS_KEYWORDS As String = "KISS CUT|ECO SOLVENT|CUTTING BAHAN|SANDBLAST|EPSON|UV PREMIUM|UV GEL|METERAN|RITRAMA|HCR|GRAFTAC|MAXDECAL|ESSENS|HIGHRESS|CUT|CUTT"
-Private Const HIDIE_KEYWORDS As String = "DIE CUT|POTONG CUTTER|ECO SOLVENT|EPSON|UV PREMIUM|UV GEL|METERAN|RITRAMA|HCR|GRAFTAC|MAXDECAL|ESSENS|INFRABOARD|FOAMBOARD|HIGHRESS|CUT|CUTT"
+' Class Module (Name) = SNCModeDetector. Keyword mode langsung didahulukan dari petunjuk umum.
+Private Const A_MACHINE_KEYWORDS As String = "LASER"
+Private Const HI_MACHINE_KEYWORDS As String = "ECO|ECO SOLVENT|UV PREMIUM|UV GEL|EPSON"
+Private Const A_BRAND_KEYWORDS As String = "QUANTAC|K-TAK"
+Private Const HI_BRAND_KEYWORDS As String = "ESSENS|HCR|RITRAMA|MAXDECAL"
+Private Const SHARED_BRAND_KEYWORDS As String = "GRAFTAC"
+Private Const A_MATERIAL_KEYWORDS As String = "VINYL|CROMO|CHROMO|ART PAPER|AP|GOLD|SILVER|LMO|KRAFT"
+Private Const HI_MATERIAL_KEYWORDS As String = "CHROME|SANDBLAST"
+' Keyword ini berlaku untuk keempat finishing tanpa menentukan mode sendiri.
+Private Const ALL_FINISHING_KEYWORDS As String = "CUTTING BAHAN"
+Private Const DIRECT_DIEA_KEYWORDS As String = "KARTU NAMA|LONG|EXTENDED|EXT"
+Private Const DIRECT_HIDIE_KEYWORDS As String = "INFRABOARD|FOAMBOARD"
+' Jenis bahan dan pilihan berikut tidak menentukan A/Hi sendiri.
+Private Const SHARED_MATERIAL_TYPE_KEYWORDS As String = "TRANSPARANT|TRANSPARENT|GLOSSY|DOFF|MATTE|MATE|HOLOGRAM"
+Private Const UV_OPTION_KEYWORDS As String = "WHITE"
+Private Const MAXDECAL_OPTION_KEYWORDS As String = "PREMIUM|LMP|LABEL"
 Private Const KISS_MARKERS As String = "KISS CUT|KIS CUT|KISSCUT|KISS|KIS|KISS CUTT|KISSCUTT|MASKING"
 Private Const DIE_MARKERS As String = "DIE CUT|DIECUT|DIE CUTT|DIECUTT|DIE"
 Private Const CUTTER_MARKERS As String = "POTONG CUTTER|POT CUTTER|POTONG|CUTTER|POT. CUTTER|POT|POT."
-Private Const HI_SHORT_KEYWORDS As String = "ECO|EPS|UV"
 Private Const DIRECTORY_DIE_MARKERS As String = "DIE"
 
 ' Directory lebih dahulu; nama CDR hanya melengkapi petunjuk yang belum lengkap.
@@ -18,36 +28,65 @@ Public Function DetectDirectoryMode(ByVal folderPath As String, ByVal fileName A
     Dim currentPath As String
     Dim parentPath As String
     Dim words As Variant
-    Dim kiss As Boolean, die As Boolean, smallFormat As Boolean, highFormat As Boolean
-    Dim fileKiss As Boolean, fileDie As Boolean, fileSmall As Boolean, fileHigh As Boolean
+    Dim kiss As Boolean, die As Boolean, smallFormat As Boolean, highFormat As Boolean, graftac As Boolean
+    Dim fileKiss As Boolean, fileDie As Boolean, fileSmall As Boolean, fileHigh As Boolean, fileGraftac As Boolean
+    Dim directDieA As Boolean, directHiDie As Boolean, fileDirectDieA As Boolean, fileDirectHiDie As Boolean
+    Dim effectiveHigh As Boolean
     conflict = False
     Set fso = CreateObject("Scripting.FileSystemObject")
     currentPath = folderPath
     Do While Len(currentPath) > 0
-        ReadSignals fso.GetFileName(currentPath), kiss, die, smallFormat, highFormat
+        ReadSignals fso.GetFileName(currentPath), kiss, die, smallFormat, highFormat, graftac, directDieA, directHiDie
         words = Split(NormalizeWords(fso.GetFileName(currentPath)), " ")
         die = die Or HasAny(words, DIRECTORY_DIE_MARKERS)
         parentPath = fso.GetParentFolderName(currentPath)
         If StrComp(parentPath, currentPath, vbTextCompare) = 0 Then Exit Do
         currentPath = parentPath
     Loop
-    If Not (kiss Or die Or smallFormat Or highFormat) Then Exit Function
-    If (kiss And die) Or (smallFormat And highFormat) Then
+    If directDieA And directHiDie Then
         conflict = True
         Exit Function
     End If
-    If Not ((kiss Or die) And (smallFormat Or highFormat)) Then
-        ReadSignals fso.GetBaseName(fileName), fileKiss, fileDie, fileSmall, fileHigh
+    If directDieA Then
+        DetectDirectoryMode = "DieA"
+        Exit Function
+    End If
+    If directHiDie Then
+        DetectDirectoryMode = "HiDie"
+        Exit Function
+    End If
+    effectiveHigh = highFormat Or (graftac And Not smallFormat)
+    If Not (kiss Or die Or smallFormat Or effectiveHigh) Then Exit Function
+    If (kiss And die) Or (smallFormat And effectiveHigh) Then
+        conflict = True
+        Exit Function
+    End If
+    If Not ((kiss Or die) And (smallFormat Or effectiveHigh)) Then
+        ReadSignals fso.GetBaseName(fileName), fileKiss, fileDie, fileSmall, fileHigh, fileGraftac, fileDirectDieA, fileDirectHiDie
+        If fileDirectDieA And fileDirectHiDie Then
+            conflict = True
+            Exit Function
+        End If
+        If fileDirectDieA Then
+            DetectDirectoryMode = "DieA"
+            Exit Function
+        End If
+        If fileDirectHiDie Then
+            DetectDirectoryMode = "HiDie"
+            Exit Function
+        End If
         kiss = kiss Or fileKiss
         die = die Or fileDie
         smallFormat = smallFormat Or fileSmall
         highFormat = highFormat Or fileHigh
+        graftac = graftac Or fileGraftac
     End If
-    If (kiss And die) Or (smallFormat And highFormat) Then
+    effectiveHigh = highFormat Or (graftac And Not smallFormat)
+    If (kiss And die) Or (smallFormat And effectiveHigh) Then
         conflict = True
         Exit Function
     End If
-    DetectDirectoryMode = ModeFromSignals(kiss, die, smallFormat, highFormat)
+    DetectDirectoryMode = ModeFromSignals(kiss, die, smallFormat, effectiveHigh)
 End Function
 
 Public Function ModeCaption(ByVal modeName As String) As String
@@ -59,21 +98,23 @@ Public Function ModeCaption(ByVal modeName As String) As String
     End Select
 End Function
 
-Private Sub ReadSignals(ByVal value As String, ByRef kiss As Boolean, ByRef die As Boolean, ByRef smallFormat As Boolean, ByRef highFormat As Boolean)
+Private Sub ReadSignals(ByVal value As String, ByRef kiss As Boolean, ByRef die As Boolean, ByRef smallFormat As Boolean, ByRef highFormat As Boolean, ByRef graftac As Boolean, ByRef directDieA As Boolean, ByRef directHiDie As Boolean)
     Dim words As Variant
     Dim cutter As Boolean
-    Dim smallKeywords As String
-    Dim highKeywords As String
+    Dim aKeywords As String
+    Dim hiKeywords As String
     words = Split(NormalizeWords(value), " ")
     kiss = kiss Or HasAny(words, KISS_MARKERS)
     cutter = HasAny(words, CUTTER_MARKERS)
     die = die Or HasAny(words, DIE_MARKERS) Or cutter
-    smallKeywords = KISSA_KEYWORDS & "|" & DIEA_KEYWORDS
-    highKeywords = HIKISS_KEYWORDS & "|" & HIDIE_KEYWORDS
-    ' Keyword bersama (misalnya CUT/CUTT) bukan bukti ukuran/kelompok produksi.
-    ' Kandidat pembeda mengikuti isi konstanta, tanpa daftar pengecualian baru.
-    smallFormat = smallFormat Or HasGroup(words, smallKeywords, highKeywords)
-    highFormat = highFormat Or HasGroup(words, highKeywords, smallKeywords) Or HasAny(words, HI_SHORT_KEYWORDS) Or cutter
+    aKeywords = A_MACHINE_KEYWORDS & "|" & A_BRAND_KEYWORDS & "|" & A_MATERIAL_KEYWORDS
+    hiKeywords = HI_MACHINE_KEYWORDS & "|" & HI_BRAND_KEYWORDS & "|" & HI_MATERIAL_KEYWORDS
+    smallFormat = smallFormat Or HasCategory(words, aKeywords)
+    highFormat = highFormat Or HasCategory(words, hiKeywords)
+    graftac = graftac Or HasAny(words, SHARED_BRAND_KEYWORDS)
+    ' Mode langsung memakai frasa exact agar typo pada kata umum tidak menimpa petunjuk lain.
+    directDieA = directDieA Or HasAnyExact(words, DIRECT_DIEA_KEYWORDS)
+    directHiDie = directHiDie Or HasAnyExact(words, DIRECT_HIDIE_KEYWORDS)
 End Sub
 
 Private Function ModeFromSignals(ByVal kiss As Boolean, ByVal die As Boolean, ByVal smallFormat As Boolean, ByVal highFormat As Boolean) As String
@@ -92,41 +133,54 @@ Public Function DetectMode(ByVal fileName As String) As String
     Dim die As Boolean
     Dim smallFormat As Boolean
     Dim highFormat As Boolean
+    Dim graftac As Boolean
+    Dim directDieA As Boolean
+    Dim directHiDie As Boolean
     Set fso = CreateObject("Scripting.FileSystemObject")
-    ReadSignals fso.GetBaseName(fileName), kiss, die, smallFormat, highFormat
-    DetectMode = ModeFromSignals(kiss, die, smallFormat, highFormat)
+    ReadSignals fso.GetBaseName(fileName), kiss, die, smallFormat, highFormat, graftac, directDieA, directHiDie
+    If directDieA And directHiDie Then Exit Function
+    If directDieA Then
+        DetectMode = "DieA"
+        Exit Function
+    End If
+    If directHiDie Then
+        DetectMode = "HiDie"
+        Exit Function
+    End If
+    DetectMode = ModeFromSignals(kiss, die, smallFormat, highFormat Or (graftac And Not smallFormat))
 End Function
 
-Private Function HasGroup(ByRef words As Variant, ByVal keywords As String, ByVal otherGroupKeywords As String) As Boolean
+Private Function HasAnyExact(ByRef words As Variant, ByVal keywords As String) As Boolean
     Dim items As Variant
     Dim i As Long
-    Dim keyword As String
+    Dim exactWords As String
+    exactWords = " " & Join(words, " ") & " "
     items = Split(keywords, "|")
     For i = 0 To UBound(items)
-        keyword = NormalizeWords(CStr(items(i)))
-        Select Case keyword
-            Case ""
-            Case "KISS CUT", "DIE CUT", "POTONG CUTTER"
-                ' Penanda jenis potong tidak sekaligus membuktikan kelompok produksi.
-            Case Else
-                If Not KeywordInList(keyword, otherGroupKeywords) Then
-                    If MatchesPhrase(words, keyword) Then
-                        HasGroup = True
-                        Exit Function
-                    End If
-                End If
-        End Select
+        If InStr(1, exactWords, " " & NormalizeWords(CStr(items(i))) & " ", vbBinaryCompare) > 0 Then
+            HasAnyExact = True
+            Exit Function
+        End If
     Next i
 End Function
 
-Private Function KeywordInList(ByVal keyword As String, ByVal keywords As String) As Boolean
+Private Function HasCategory(ByRef words As Variant, ByVal keywords As String) As Boolean
     Dim items As Variant
     Dim i As Long
+    Dim keyword As String
+    Dim exactWords As String
     items = Split(keywords, "|")
+    exactWords = " " & Join(words, " ") & " "
     For i = 0 To UBound(items)
-        ' Keanggotaan daftar harus exact setelah normalisasi, bukan fuzzy.
-        If keyword = NormalizeWords(CStr(items(i))) Then
-            KeywordInList = True
+        keyword = NormalizeWords(CStr(items(i)))
+        ' CHROMO dan CHROME beda kelompok; jangan samakan lewat toleransi typo.
+        If keyword = "CHROMO" Or keyword = "CHROME" Then
+            If InStr(1, exactWords, " " & keyword & " ", vbBinaryCompare) > 0 Then
+                HasCategory = True
+                Exit Function
+            End If
+        ElseIf MatchesPhrase(words, keyword) Then
+            HasCategory = True
             Exit Function
         End If
     Next i
