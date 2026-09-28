@@ -3,7 +3,7 @@ Option Explicit
 ' Class Module (Name) = SNCModeDetector. Keyword mode langsung didahulukan dari petunjuk umum.
 Private Const A_MACHINE_KEYWORDS As String = "LASER"
 Private Const HI_MACHINE_KEYWORDS As String = "ECO|ECO SOLVENT|UV PREMIUM|UV GEL|EPSON"
-Private Const A_BRAND_KEYWORDS As String = "QUANTAC|K-TAK"
+Private Const A_BRAND_KEYWORDS As String = "QUANTAC|K-TAK|KTAK"
 Private Const HI_BRAND_KEYWORDS As String = "ESSENS|HCR|RITRAMA|MAXDECAL"
 Private Const SHARED_BRAND_KEYWORDS As String = "GRAFTAC"
 Private Const A_MATERIAL_KEYWORDS As String = "VINYL|CROMO|CHROMO|ART PAPER|AP|GOLD|SILVER|LMO|KRAFT"
