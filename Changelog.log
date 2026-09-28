@@ -43,3 +43,9 @@
 [Pemindahan keyword]
 + KARTU NAMA/LONG/EXTENDED/EXT langsung memilih DieA; INFRABOARD/FOAMBOARD langsung memilih HiDie, meski ada petunjuk finishing lain.
 ~ SANDBLAST berlaku untuk kedua mode Hi; CUTTING BAHAN berlaku untuk semua mode. Keyword lama lainnya tidak lagi dipakai untuk deteksi.
+
+------------------------------------------------------------------------------------------------------------------------------------------------------
+2026-09-28
+[MacroBehavior AutoSNC]
++ AutoSNC dapat menjalankan `@cmdProcess` dan `@cmdClose` dalam antrean MacroRunner; alur gabungan dengan AutoLabel dan ExportRelated berhasil diuji.
+~ Dokumen sumber yang belum disimpan kini dilaporkan sebagai ERROR dengan pesan jelas, sementara AutoSNC tetap terbuka tanpa menghentikan VBA.

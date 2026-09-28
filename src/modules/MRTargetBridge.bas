@@ -41,3 +41,46 @@ Failed:
     On Error GoTo 0
     Err.Raise errorNumber, "MRTargetBridge.OpenMacro", operation & ": " & errorDescription
 End Function
+
+' Semantic preflight only: no UserForm, registry, or document access.
+Public Function ValidateBehavior(ByVal script As String, ByVal observer As Object, ByVal token As String) As Boolean
+    Dim contract As SNCBehaviorContract, block As MRBehaviorBlock
+    Dim number As Long, source As String, description As String
+
+    On Error GoTo Failed
+    CallByName observer, "BehaviorBridgeEntered", VbMethod, token
+    Set contract = New SNCBehaviorContract
+    Set block = contract.Validate(script)
+    CallByName observer, "BehaviorBridgeFinished", VbMethod, token, 0&, vbNullString
+    ValidateBehavior = True
+    Exit Function
+Failed:
+    number = Err.Number: source = Err.Source: description = Err.Description
+    On Error Resume Next
+    CallByName observer, "BehaviorBridgeFinished", VbMethod, token, number, _
+        "Source asli: " & source & vbCrLf & description
+    On Error GoTo 0
+    ' The runner receives the failure through its token callback.
+    ValidateBehavior = False
+End Function
+
+Public Function RunBehavior(ByVal script As String, ByVal observer As Object, ByVal token As String) As Boolean
+    Dim session As SNCBehaviorSession
+    Dim number As Long, source As String, description As String
+
+    On Error GoTo Failed
+    CallByName observer, "BehaviorBridgeEntered", VbMethod, token
+    Set session = New SNCBehaviorSession
+    session.Start script, observer, token
+    CallByName observer, "BehaviorBridgeFinished", VbMethod, token, 0&, vbNullString
+    RunBehavior = True
+    Exit Function
+Failed:
+    number = Err.Number: source = Err.Source: description = Err.Description
+    On Error Resume Next
+    CallByName observer, "BehaviorBridgeFinished", VbMethod, token, number, _
+        "Source asli: " & source & vbCrLf & description
+    On Error GoTo 0
+    ' Raising here escapes GMSManager.RunMacro into the native VBA error dialog.
+    RunBehavior = False
+End Function

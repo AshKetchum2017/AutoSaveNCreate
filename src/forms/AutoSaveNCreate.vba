@@ -3,6 +3,9 @@ Option Explicit
 ' MacroRunner integration: no reference to the runner project is required.
 Private pMRObserver As Object
 Private pMRToken As String
+Private pMRBehavior As Boolean
+Private pMRProcessAction As Boolean
+Private pMRLastSavedPath As String
 
 
 Private pUsers As Collection
@@ -42,7 +45,7 @@ End Sub
 
 Private Sub cmbCorelVersion_Change()
     Dim settings As SNCSettingsStore
-    If pLoadingCorelVersion Then Exit Sub
+    If pLoadingCorelVersion Or pMRBehavior Then Exit Sub
     If cmbCorelVersion.ListIndex < 0 Then Exit Sub
     On Error GoTo SaveFailed
     Set settings = New SNCSettingsStore
@@ -54,7 +57,7 @@ End Sub
 
 Private Sub chkEmbedColorProfiles_Click()
     Dim settings As SNCSettingsStore
-    If pLoadingEmbedding Then Exit Sub
+    If pLoadingEmbedding Or pMRBehavior Then Exit Sub
     On Error GoTo SaveFailed
     Set settings = New SNCSettingsStore
     settings.SaveEmbedColorProfiles CBool(chkEmbedColorProfiles.Value)
@@ -65,7 +68,7 @@ End Sub
 
 Private Sub chkEmbedFonts_Click()
     Dim settings As SNCSettingsStore
-    If pLoadingEmbedding Then Exit Sub
+    If pLoadingEmbedding Or pMRBehavior Then Exit Sub
     On Error GoTo SaveFailed
     Set settings = New SNCSettingsStore
     settings.SaveEmbedFonts CBool(chkEmbedFonts.Value)
@@ -131,6 +134,10 @@ Private Sub cmdClose_Click()
 End Sub
 
 Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    If pProcessing Then
+        Cancel = 1
+        Exit Sub
+    End If
     ' Close/X melepas pilihan; daftar directory tetap berada di SNCSession.
     If Not pDirectorySession Is Nothing Then pDirectorySession.ClearSelection
 End Sub
@@ -181,14 +188,18 @@ Private Sub cmdProcess_Click()
     Dim savedPath As String
     Dim errorNumber As Long
     Dim errorDescription As String
+    Dim errorSource As String
     Dim baseDirectory As String
     Dim disposable As Boolean
     Dim tokenText As String
     If pProcessing Then Exit Sub
     On Error GoTo ProcessFailed
+    pMRLastSavedPath = vbNullString
     If Application.Documents.Count = 0 Then Err.Raise 5, "AutoSaveNCreate", "Tidak ada dokumen aktif."
     If SyncActiveDocument() Then
         UpdateDirectoryState
+        If pMRProcessAction Then _
+            Err.Raise 5, "AutoSaveNCreate", "Dokumen aktif berubah. Periksa pilihan mode dan setting user sebelum Process."
         MsgBox "Dokumen aktif berubah. Periksa pilihan mode dan setting user, lalu tekan Process kembali.", vbInformation, "AutoSaveNCreate"
         Exit Sub
     End If
@@ -210,16 +221,21 @@ Private Sub cmdProcess_Click()
     cmdProcess.Enabled = False
     savedPath = runner.SaveDocument(doc, baseDirectory, tokenText, disposable, _
         CStr(cmbCorelVersion.Value), CBool(chkEmbedColorProfiles.Value))
+    pMRLastSavedPath = savedPath
     If Len(savedPath) > 0 And disposable Then pDirectorySession.ClearSelection
     pProcessing = False
     UpdateDirectoryState
-    If Len(savedPath) > 0 Then MsgBox "CDR berhasil disimpan:" & vbCrLf & savedPath, vbInformation, "AutoSaveNCreate"
+    If Len(savedPath) > 0 And Not pMRProcessAction Then _
+        MsgBox "CDR berhasil disimpan:" & vbCrLf & savedPath, vbInformation, "AutoSaveNCreate"
     Exit Sub
 ProcessFailed:
     errorNumber = Err.Number
+    errorSource = Err.Source
     errorDescription = Err.Description
     pProcessing = False
     UpdateDirectoryState
+    If pMRProcessAction Then _
+        Err.Raise errorNumber, "AutoSNC.cmdProcess_Click", "Source asli: " & errorSource & vbCrLf & errorDescription
     MsgBox "Gagal memproses CDR (" & CStr(errorNumber) & "): " & vbCrLf & errorDescription, vbExclamation, "AutoSaveNCreate"
 End Sub
 
@@ -361,6 +377,82 @@ Private Sub RestoreDefaultMode()
     optHiDie.Value = pDefaultModes(1)
     optKissA.Value = pDefaultModes(2)
     optHiKiss.Value = pDefaultModes(3)
+End Sub
+
+' MacroBehavior changes are per run; manual changes keep their existing persistence.
+Public Sub MRSetBehaviorMode(ByVal active As Boolean)
+    pMRBehavior = active
+End Sub
+
+Public Sub MRBehaviorValue(ByVal target As String, ByVal value As Variant)
+    Dim i As Long
+    Select Case LCase$(target)
+        Case "cmbuserselection"
+            For i = 0 To cmbUserSelection.ListCount - 1
+                If StrComp(CStr(cmbUserSelection.List(i)), CStr(value), vbTextCompare) = 0 Then
+                    cmbUserSelection.ListIndex = i
+                    Exit Sub
+                End If
+            Next i
+            Err.Raise 5, "AutoSNC.MRBehaviorValue", "Setting user tidak tersedia: " & CStr(value)
+        Case "cmbcorelversion"
+            For i = 0 To cmbCorelVersion.ListCount - 1
+                If StrComp(CStr(cmbCorelVersion.List(i)), CStr(value), vbTextCompare) = 0 Then
+                    cmbCorelVersion.ListIndex = i
+                    Exit Sub
+                End If
+            Next i
+            Err.Raise 5, "AutoSNC.MRBehaviorValue", "Versi CDR tidak tersedia: " & CStr(value)
+        Case "chkembedcolorprofiles": chkEmbedColorProfiles.Value = CBool(value)
+        Case "chkembedfonts": chkEmbedFonts.Value = CBool(value)
+        Case "optdiea", "opthidie", "optkissa", "opthikiss"
+            If Not optDieA.Enabled Then _
+                Err.Raise 5, "AutoSNC.MRBehaviorValue", "Mode tidak dapat diubah saat DisposableDirectory terpilih."
+            If CBool(value) Then ClearModeOptions
+            Select Case LCase$(target)
+                Case "optdiea": optDieA.Value = CBool(value)
+                Case "opthidie": optHiDie.Value = CBool(value)
+                Case "optkissa": optKissA.Value = CBool(value)
+                Case "opthikiss": optHiKiss.Value = CBool(value)
+            End Select
+        Case Else
+            Err.Raise 5, "AutoSNC.MRBehaviorValue", "Target tidak terdaftar: " & target
+    End Select
+End Sub
+
+Public Function MRBehaviorReadValue(ByVal target As String) As Variant
+    Select Case LCase$(target)
+        Case "cmbuserselection": MRBehaviorReadValue = cmbUserSelection.Value
+        Case "cmbcorelversion": MRBehaviorReadValue = cmbCorelVersion.Value
+        Case "chkembedcolorprofiles": MRBehaviorReadValue = chkEmbedColorProfiles.Value
+        Case "chkembedfonts": MRBehaviorReadValue = chkEmbedFonts.Value
+        Case "optdiea": MRBehaviorReadValue = optDieA.Value
+        Case "opthidie": MRBehaviorReadValue = optHiDie.Value
+        Case "optkissa": MRBehaviorReadValue = optKissA.Value
+        Case "opthikiss": MRBehaviorReadValue = optHiKiss.Value
+        Case Else
+            Err.Raise 5, "AutoSNC.MRBehaviorReadValue", "Default tidak tersedia: " & target
+    End Select
+End Function
+
+Public Sub MRBehaviorClose()
+    cmdClose_Click
+End Sub
+
+Public Sub MRBehaviorProcess()
+    Dim number As Long, source As String, description As String
+    If pProcessing Then Err.Raise 5, "AutoSNC.MRBehaviorProcess", "Process sedang berjalan."
+    On Error GoTo Failed
+    pMRProcessAction = True
+    cmdProcess_Click
+    pMRProcessAction = False
+    If Len(pMRLastSavedPath) = 0 Then _
+        Err.Raise 5, "AutoSNC.MRBehaviorProcess", "Penyimpanan dibatalkan; AutoSNC tetap terbuka."
+    Exit Sub
+Failed:
+    number = Err.Number: source = Err.Source: description = Err.Description
+    pMRProcessAction = False
+    Err.Raise number, "AutoSNC.MRBehaviorProcess", "Source asli: " & source & vbCrLf & description
 End Sub
 
 ' Called only by MRTargetBridge; normal menu entry points remain unchanged.

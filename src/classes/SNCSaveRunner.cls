@@ -10,6 +10,8 @@ Public Function SaveDocument(ByVal doc As Document, ByVal baseDirectory As Strin
     Dim parser As SNCFolderParser
     Dim options As StructSaveAsOptions
     Dim fileName As String
+    Dim sourceFileName As String
+    Dim sourceFilePath As String
     Dim folderName As String
     Dim targetFolder As String
     Dim targetPath As String
@@ -25,15 +27,20 @@ Public Function SaveDocument(ByVal doc As Document, ByVal baseDirectory As Strin
     On Error GoTo SaveFailed
     operation = "Memeriksa dokumen sumber"
     If doc Is Nothing Then Err.Raise 5, "SNCSaveRunner", "Tidak ada dokumen aktif."
-    If Len(doc.FileName) = 0 Or Len(doc.FilePath) = 0 Then
-        Err.Raise 5, "SNCSaveRunner", "Simpan dokumen sumber sebagai CDR terlebih dahulu agar nama dan folder sumber tersedia."
-    End If
+    ' CorelDRAW may raise while reading these properties on an Untitled document.
+    On Error Resume Next
+    sourceFileName = doc.FileName
+    sourceFilePath = doc.FilePath
+    Err.Clear
+    On Error GoTo SaveFailed
+    If Len(sourceFileName) = 0 Or Len(sourceFilePath) = 0 Then _
+        Err.Raise 5, "SNCSaveRunner", "Nama atau path dokumen sumber tidak tersedia. Simpan dokumen aktif sebagai CDR terlebih dahulu."
     operation = "Memvalidasi versi output CDR"
     Set settings = New SNCSettingsStore
     If Len(corelVersionLabel) = 0 Then corelVersionLabel = settings.LoadCorelVersion()
     targetVersion = settings.ResolveCorelFileVersion(corelVersionLabel)
     Set fso = CreateObject("Scripting.FileSystemObject")
-    fileName = fso.GetFileName(doc.FileName)
+    fileName = fso.GetFileName(sourceFileName)
     If StrComp(fso.GetExtensionName(fileName), "cdr", vbTextCompare) <> 0 Then
         Err.Raise 5, "SNCSaveRunner", "Dokumen sumber harus berupa file CDR."
     End If
@@ -45,9 +52,9 @@ Public Function SaveDocument(ByVal doc As Document, ByVal baseDirectory As Strin
     Else
         Set parser = New SNCFolderParser
         operation = "Parsing nama folder"
-        folderName = parser.BuildFolderName(tokenText, doc.FilePath)
+        folderName = parser.BuildFolderName(tokenText, sourceFilePath)
         operation = "Membaca tahun, bulan, dan tanggal sumber"
-        dateDirectory = parser.SourceDateDirectory(doc.FilePath)
+        dateDirectory = parser.SourceDateDirectory(sourceFilePath)
         targetFolder = fso.BuildPath(fso.BuildPath(baseDirectory, dateDirectory), folderName)
     End If
     If fso.FileExists(targetFolder) Then Err.Raise 5, "SNCSaveRunner", "Nama folder tujuan sudah digunakan oleh sebuah file: " & targetFolder
@@ -91,8 +98,8 @@ Public Function SaveDocument(ByVal doc As Document, ByVal baseDirectory As Strin
 SaveFailed:
     errorNumber = Err.Number
     errorDescription = Err.Description
-    Err.Raise errorNumber, "SNCSaveRunner", "Operasi: " & operation & vbCrLf & _
-        "Tujuan: " & targetPath & vbCrLf & errorDescription
+    If Len(targetPath) > 0 Then errorDescription = "Tujuan: " & targetPath & vbCrLf & errorDescription
+    Err.Raise errorNumber, "SNCSaveRunner", "Operasi: " & operation & vbCrLf & errorDescription
 End Function
 
 Private Sub EnsureTargetFolder(ByVal baseDirectory As String, ByVal targetFolder As String)
