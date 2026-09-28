@@ -44,9 +44,11 @@ Mode di sini menentukan lokasi penyimpanan. Macro tidak mendistribusikan objek, 
 
 Saat membaca dokumen yang baru aktif, macro mencoba menentukan mode awal dari nama file CDR.
 
-Deteksi menggunakan keyword jenis cutting dan format pekerjaan, seperti `KISS CUT`, `DIE CUT`, `A3`, `LASER`, `ECO SOLVENT`, dan `METERAN`, dengan toleransi typo terbatas.
+Deteksi dari nama file memakai petunjuk finishing (`KISS CUT` atau `DIE CUT`) dan kategori A/Hi, misalnya `LASER`, `ECO SOLVENT`, `VINYL`, atau `GRAFTAC`, dengan toleransi typo terbatas. Nama `KISS CUT ECO SOLVENT` dapat dikenali sebagai `HiKiss`, termasuk variasi dengan strip atau kurung.
 
-Hasil deteksi membantu pemilihan awal. User tetap perlu memeriksa mode sebelum menjalankan **Process**.
+Beberapa frasa mempunyai prioritas langsung: `KARTU NAMA`, `LONG`, `EXTENDED`, dan `EXT` memilih `DieA`; `INFRABOARD` dan `FOAMBOARD` memilih `HiDie`. `GRAFTAC` sendiri memberi petunjuk Hi, sedangkan `VINYL` bersama `GRAFTAC` memberi petunjuk A; jika finishing-nya `DIE CUT`, hasilnya `DieA`. `CHROMO` dan `CHROME` dibedakan secara eksplisit, bukan dianggap typo satu sama lain.
+
+Hasil deteksi membantu pemilihan awal. Bila petunjuk tidak lengkap atau saling bertentangan, mode tidak dipastikan oleh detektor. User tetap perlu memeriksa mode sebelum menjalankan **Process**.
 
 Pilihan manual dipertahankan selama dokumen yang sama masih aktif. Jika mode tidak terdeteksi, pilihan dikembalikan ke nilai default dari UserForm.
 
@@ -236,7 +238,7 @@ Tanpa benturan nama, nama file asal tetap digunakan.
 ## Basic Workflow
 
 1. Buka dokumen CorelDRAW yang sudah tersimpan sebagai `.cdr`.
-2. Jalankan UserForm `AutoSaveNCreate`.
+2. Jalankan UserForm `AutoSNC`.
 3. Pada penggunaan awal, siapkan operator dan pola token melalui `UserSettingsMenu`.
 4. Atur root directory untuk mode yang akan digunakan melalui `DirectorySettings`.
 5. Periksa pilihan **DieA**, **HiDie**, **KissA**, atau **HiKiss**.
@@ -263,13 +265,58 @@ Selama proses berlangsung, `cmdProcess` dinonaktifkan untuk mencegah pemrosesan 
 
 Jika terjadi error, macro menampilkan informasi kegagalan. Validasi ini tidak menggantikan backup, terutama ketika memilih overwrite.
 
+## Integrasi MacroRunner dan MacroBehavior
+
+`AutoSNC` dapat dijalankan dari antrean MacroRunner melalui `MRTargetBridge`. Untuk otomatisasi, isi `MacroBehavior` pada konfigurasi MacroRunner dengan satu tahap `AutoSNC`. Contoh paling ringkas ini memakai nilai form yang sudah dimuat saat dibuka:
+
+```text
+{AutoSaveNCreate:
+    AutoSNC[
+        @cmdProcess;
+        @cmdClose
+    ]
+}
+```
+
+Urutannya wajib **Process** lebih dahulu, lalu **Close** jika ingin form ditutup otomatis. `@cmdClose` boleh dihilangkan; setelah **Process** berhasil, form tetap terbuka sampai ditutup secara manual. Saat form ditutup, MacroRunner menerima callback bahwa langkah tersebut telah selesai.
+
+Target opsional berikut hanya mengubah nilai selama eksekusi Behavior:
+
+| Target di `AutoSNC` | Jenis nilai | Keterangan |
+| --- | --- | --- |
+| `cmbUserSelection` | String | Nama setting user yang sudah tersedia, misalnya `"Nama Operator"`. |
+| `cmbCorelVersion` | String | Label versi CDR yang tersedia dalam pilihan form, misalnya `"25.0 (2024)"`. |
+| `optDieA`, `optHiDie`, `optKissA`, `optHiKiss` | Boolean | Pilihan mode; memberi `True` pada satu mode mengosongkan pilihan mode lain. Tidak dapat diubah saat DisposableSave aktif. |
+| `chkEmbedColorProfiles` | Boolean | Menerapkan pilihan embedding profil warna pada penyimpanan ini. |
+| `chkEmbedFonts` | Boolean | Nilai form saja; embedding font ke CDR belum diterapkan. |
+
+Contoh dengan pilihan eksplisit:
+
+```text
+{AutoSaveNCreate:
+    AutoSNC[
+        cmbUserSelection="Nama Operator";
+        optDieA=True;
+        chkEmbedColorProfiles=True;
+        @cmdProcess;
+        @cmdClose
+    ]
+}
+```
+
+Ganti `"Nama Operator"` dengan nama setting yang benar-benar tersimpan. Nilai yang tidak ditulis mengikuti nilai awal form; `Default` memakai nilai awal kontrol saat form dibuka. `Nothing`, `Empty`, dan `Null` melewati assignment setelah nama target divalidasi. Pengaturan versi dan embedding yang diberikan lewat Behavior berlaku untuk langkah tersebut dan tidak menimpa preferensi manual yang tersimpan.
+
+`ValidateBehavior` memeriksa sintaks, nama form, target, jenis nilai, urutan action, dan label versi CDR sebelum antrean berjalan. Ketersediaan setting user, dokumen yang sudah tersimpan sebagai CDR, folder tujuan, dan benturan file tetap diperiksa saat eksekusi. Bila dokumen belum disimpan, `@cmdProcess` mengembalikan `ERROR` dengan pesan yang jelas dan membiarkan `AutoSNC` terbuka. Saat terjadi benturan nama file, dialog duplikat/timpa/batal tetap memerlukan pilihan pengguna.
+
+Integrasi ini menggunakan `src/modules/MRTargetBridge.bas`, `SNCBehaviorContract.cls`, `SNCBehaviorSession.cls`, dan class parser `MRBehavior*` yang ada dalam project target. Nama file code-behind `src/forms/AutoSaveNCreate.vba` tetap memakai `(Name)` UserForm `AutoSNC` pada project VBA.
+
 ---
 
 ## Project Structure
 
 ### `AutoSaveNCreate.vba`
 
-Code-behind untuk Main UserForm. Mengatur pilihan mode, operator, versi CDR, embedding preferences, sinkronisasi dokumen aktif, dan pemanggilan proses penyimpanan.
+Code-behind untuk Main UserForm bernama `AutoSNC`. Mengatur pilihan mode, operator, versi CDR, embedding preferences, sinkronisasi dokumen aktif, proses penyimpanan, dan hook MacroRunner.
 
 ### `DirectorySettings.vba`
 
@@ -299,6 +346,10 @@ Mengelola pengaturan registry untuk operator, root directory, versi CDR, dan emb
 
 Menyediakan penyimpanan directory sementara dan instance session yang digunakan bersama oleh UserForm.
 
+### `SNCBehaviorContract.cls`, `SNCBehaviorSession.cls`, dan `MRTargetBridge.bas`
+
+Memvalidasi kontrak Behavior, menjalankan instruksi pada `AutoSNC`, dan menghubungkan target dengan MacroRunner. Class `MRBehavior*` menyediakan model instruksi serta parser yang digunakan kontrak tersebut.
+
 ### `Changelog.log`
 
 Mencatat penambahan fitur, perubahan behavior, perbaikan, dan perkembangan AutoSaveNCreate.
@@ -309,7 +360,7 @@ Mencatat penambahan fitur, perubahan behavior, perbaikan, dan perkembangan AutoS
 
 AutoSaveNCreate dibuat untuk workflow produksi tertentu di CorelDRAW. Struktur folder sumber, kategori, keyword deteksi mode, dan koreksi nama mengikuti aturan yang terdapat dalam source code.
 
-Repository menyediakan source VBA dan code-behind UserForm. File code-behind tidak dengan sendirinya menyediakan layout visual UserForm; form dan kontrol dengan nama yang sesuai tetap diperlukan pada project VBA.
+Repository menyediakan source VBA dan code-behind UserForm. File code-behind tidak dengan sendirinya menyediakan layout visual UserForm; form dan kontrol dengan nama yang sesuai tetap diperlukan pada project VBA, termasuk `AutoSNC` sebagai nama Main UserForm.
 
 Penyesuaian workflow di luar aturan tersebut dapat memerlukan perubahan source code. Pilihan versi output tidak menjamin kompatibilitas seluruh fitur dokumen pada format CDR yang lebih lama.
 
@@ -331,11 +382,14 @@ AutoSaveNCreate saat ini mencakup:
 - preferensi EmbedFonts yang belum diterapkan ke file hasil;
 - penanganan duplicate, overwrite, dan cancel;
 - validasi input dan pelaporan error.
+- integrasi `AutoSNC` dengan MacroRunner melalui `MacroBehavior`.
 
 Fokus utamanya adalah mengurangi pekerjaan manual saat menentukan lokasi dan menyimpan file produksi, bukan mengubah susunan objek di dalam dokumen.
 
 ---
 
-## Feedback and Development
+## Lisensi dan masukan
+
+Project ini menggunakan lisensi MIT; lihat [LICENSE](LICENSE).
 
 Source boleh dipelajari dan dikembangkan, dan issue/feedback tentang bug, edge case, CorelDRAW API, architecture, atau improvement sangat dihargai.
