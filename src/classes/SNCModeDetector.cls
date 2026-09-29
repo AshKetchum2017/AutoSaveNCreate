@@ -10,7 +10,7 @@ Private Const A_MATERIAL_KEYWORDS As String = "VINYL|CROMO|CHROMO|ART PAPER|AP|G
 Private Const HI_MATERIAL_KEYWORDS As String = "CHROME|SANDBLAST"
 ' Keyword ini berlaku untuk keempat finishing tanpa menentukan mode sendiri.
 Private Const ALL_FINISHING_KEYWORDS As String = "CUTTING BAHAN"
-Private Const DIRECT_DIEA_KEYWORDS As String = "KARTU NAMA|LONG|EXTENDED|EXT"
+Private Const DIRECT_DIEA_KEYWORDS As String = "KARTU NAMA|LONG|EXTENDED|EXT|PCS|GELANG TIKET"
 Private Const DIRECT_HIDIE_KEYWORDS As String = "INFRABOARD|FOAMBOARD"
 ' Jenis bahan dan pilihan berikut tidak menentukan A/Hi sendiri.
 Private Const SHARED_MATERIAL_TYPE_KEYWORDS As String = "TRANSPARANT|TRANSPARENT|GLOSSY|DOFF|MATTE|MATE|HOLOGRAM"
@@ -98,12 +98,12 @@ Public Function ModeCaption(ByVal modeName As String) As String
     End Select
 End Function
 
-Private Sub ReadSignals(ByVal value As String, ByRef kiss As Boolean, ByRef die As Boolean, ByRef smallFormat As Boolean, ByRef highFormat As Boolean, ByRef graftac As Boolean, ByRef directDieA As Boolean, ByRef directHiDie As Boolean)
+Private Sub ReadSignals(ByVal Value As String, ByRef kiss As Boolean, ByRef die As Boolean, ByRef smallFormat As Boolean, ByRef highFormat As Boolean, ByRef graftac As Boolean, ByRef directDieA As Boolean, ByRef directHiDie As Boolean)
     Dim words As Variant
     Dim cutter As Boolean
     Dim aKeywords As String
     Dim hiKeywords As String
-    words = Split(NormalizeWords(value), " ")
+    words = Split(NormalizeWords(Value), " ")
     kiss = kiss Or HasAny(words, KISS_MARKERS)
     cutter = HasAny(words, CUTTER_MARKERS)
     die = die Or HasAny(words, DIE_MARKERS) Or cutter
@@ -219,13 +219,13 @@ Private Function MatchesPhrase(ByRef words As Variant, ByVal keyword As String) 
     Next i
 End Function
 
-Private Function NormalizeWords(ByVal value As String) As String
+Private Function NormalizeWords(ByVal Value As String) As String
     Dim i As Long
     Dim ch As String
     Dim result As String
-    value = UCase$(value)
-    For i = 1 To Len(value)
-        ch = Mid$(value, i, 1)
+    Value = UCase$(Value)
+    For i = 1 To Len(Value)
+        ch = Mid$(Value, i, 1)
         If InStr(1, "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+", ch, vbBinaryCompare) > 0 Then
             result = result & ch
         ElseIf Len(result) > 0 Then
