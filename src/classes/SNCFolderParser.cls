@@ -109,10 +109,8 @@ Public Function BuildFolderName(ByVal templateText As String, ByVal sourceDirect
     Dim result As String
     Dim category As String
     Dim parentName As String
-    Dim fso As Object
 
     ValidateTemplate templateText
-    Set fso = CreateObject("Scripting.FileSystemObject")
     For i = 1 To Len(templateText)
         ch = Mid$(templateText, i, 1)
         If ch = Chr$(34) Then
@@ -128,8 +126,7 @@ Public Function BuildFolderName(ByVal templateText As String, ByVal sourceDirect
                     result = result & category
                 Case "~"
                     If Len(parentName) = 0 Then
-                        parentName = CorrectParentName(fso.GetFileName(RemoveTrailingSlash(sourceDirectory)))
-                        If Len(parentName) = 0 Then Err.Raise 5, "SNCFolderParser", "Nama folder sumber untuk token ~ tidak ditemukan."
+                        parentName = TokenParentName(sourceDirectory)
                     End If
                     result = result & parentName
                 Case Else
@@ -141,6 +138,65 @@ Public Function BuildFolderName(ByVal templateText As String, ByVal sourceDirect
     If inQuotes Then Err.Raise 5, "SNCFolderParser", "Tanda kutip pada pola token belum ditutup."
     ValidateFolderName result
     BuildFolderName = result
+End Function
+
+Private Function TokenParentName(ByVal sourceDirectory As String) As String
+    Dim fso As Object
+    Dim partPattern As Object
+    Dim currentPath As String
+    Dim originalPath As String
+    Dim parentPath As String
+    Dim folderName As String
+    Dim cleanedName As String
+
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    originalPath = RemoveTrailingSlash(sourceDirectory)
+    currentPath = originalPath
+    folderName = fso.GetFileName(currentPath)
+    If Len(folderName) = 0 Then Err.Raise 5, "SNCFolderParser", "Nama folder sumber untuk token ~ tidak ditemukan."
+
+    Set partPattern = CreateObject("VBScript.RegExp")
+    partPattern.Pattern = "^PART[ _-]*[0-9]+$"
+    partPattern.IgnoreCase = True
+    Do While partPattern.Test(RemoveParenthesizedText(fso.GetFileName(currentPath)))
+        If IsCategoryLevel(currentPath, fso) Then Exit Do
+        parentPath = fso.GetParentFolderName(currentPath)
+        If Len(parentPath) = 0 Or StrComp(parentPath, currentPath, vbTextCompare) = 0 Then Exit Do
+        If IsCategoryLevel(parentPath, fso) Then
+            currentPath = originalPath
+            Exit Do
+        End If
+        currentPath = parentPath
+    Loop
+
+    folderName = fso.GetFileName(currentPath)
+    cleanedName = RemoveParenthesizedText(folderName)
+    If Len(cleanedName) = 0 Then cleanedName = folderName
+    TokenParentName = CorrectParentName(cleanedName)
+End Function
+
+Private Function IsCategoryLevel(ByVal folderPath As String, ByVal fso As Object) As Boolean
+    Dim dayPath As String
+    Dim monthPath As String
+
+    dayPath = fso.GetParentFolderName(folderPath)
+    monthPath = fso.GetParentFolderName(dayPath)
+    IsCategoryLevel = IsDayFolder(fso.GetFileName(dayPath)) And IsMonthFolder(fso.GetFileName(monthPath))
+End Function
+
+Private Function RemoveParenthesizedText(ByVal folderName As String) As String
+    Dim expression As Object
+    Dim result As String
+
+    Set expression = CreateObject("VBScript.RegExp")
+    expression.Global = True
+    expression.Pattern = "\([^()]*\)"
+    result = folderName
+    Do While expression.Test(result)
+        result = expression.Replace(result, vbNullString)
+    Loop
+    expression.Pattern = " +"
+    RemoveParenthesizedText = Trim$(expression.Replace(result, " "))
 End Function
 
 Public Function CategoryFromPath(ByVal sourceDirectory As String) As String
