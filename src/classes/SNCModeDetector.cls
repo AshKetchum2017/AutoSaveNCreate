@@ -3,10 +3,10 @@ Option Explicit
 ' Class Module (Name) = SNCModeDetector. Keyword mode langsung didahulukan dari petunjuk umum.
 Private Const A_MACHINE_KEYWORDS As String = "LASER"
 Private Const HI_MACHINE_KEYWORDS As String = "ECO|ECO SOLVENT|UV PREMIUM|UV GEL|EPSON"
-Private Const A_BRAND_KEYWORDS As String = "QUANTAC|K-TAK|KTAK"
+Private Const A_BRAND_KEYWORDS As String = "QUANTAC|QUANTACT|K-TAK|KTAK"
 Private Const HI_BRAND_KEYWORDS As String = "ESSENS|HCR|RITRAMA|MAXDECAL"
-Private Const SHARED_BRAND_KEYWORDS As String = "GRAFTAC"
-Private Const A_MATERIAL_KEYWORDS As String = "VINYL|CROMO|CHROMO|ART PAPER|AP|GOLD|SILVER|LMO|KRAFT"
+Private Const SHARED_BRAND_KEYWORDS As String = "GRAFTAC|GRAFTACT"
+Private Const A_MATERIAL_KEYWORDS As String = "VINYL|VYNIL|A3|A3+|CROMO|CHROMO|ART PAPER|AP|GOLD|SILVER|LMO|KRAFT"
 Private Const HI_MATERIAL_KEYWORDS As String = "CHROME|SANDBLAST"
 ' Keyword ini berlaku untuk keempat finishing tanpa menentukan mode sendiri.
 Private Const ALL_FINISHING_KEYWORDS As String = "CUTTING BAHAN"
@@ -173,8 +173,8 @@ Private Function HasCategory(ByRef words As Variant, ByVal keywords As String) A
     exactWords = " " & Join(words, " ") & " "
     For i = 0 To UBound(items)
         keyword = NormalizeWords(CStr(items(i)))
-        ' CHROMO dan CHROME beda kelompok; jangan samakan lewat toleransi typo.
-        If keyword = "CHROMO" Or keyword = "CHROME" Then
+        ' CHROMO/CHROME dan KTAK/KOTAK tidak boleh disamakan lewat toleransi typo.
+        If keyword = "CHROMO" Or keyword = "CHROME" Or keyword = "KTAK" Then
             If InStr(1, exactWords, " " & keyword & " ", vbBinaryCompare) > 0 Then
                 HasCategory = True
                 Exit Function
